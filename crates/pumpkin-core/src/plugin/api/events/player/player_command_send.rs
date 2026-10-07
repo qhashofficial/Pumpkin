@@ -18,6 +18,10 @@ pub struct PlayerCommandSendEvent {
 
     /// The command being executed
     pub command: String,
+
+    /// Whether the command is written to the server log. Plugins can turn this off for
+    /// commands that carry secrets, such as passwords.
+    pub log: bool,
 }
 
 impl PlayerCommandSendEvent {
@@ -33,6 +37,7 @@ impl PlayerCommandSendEvent {
         Self {
             player,
             command,
+            log: true,
             cancelled: false,
         }
     }

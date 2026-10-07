@@ -18,6 +18,7 @@ impl JavaClient {
             PlayerCommandSendEvent {
                 player: player.clone(),
                 command: command_str.to_string(),
+                log: true,
                 cancelled: false
             };
 
@@ -29,7 +30,7 @@ impl JavaClient {
                     &command,
                 );
 
-                if server.advanced_config.commands.log_console {
+                if event.log && server.advanced_config.commands.log_console {
                     info!(
                         "Player ({}): executed command /{}",
                         player.gameprofile.name,

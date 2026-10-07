@@ -347,6 +347,7 @@ impl ToFromWasmEvent for PlayerCommandSendEvent {
         Event::PlayerCommandSendEvent(PlayerCommandSendEventData {
             player,
             command: self.command.clone(),
+            log: self.log,
             cancelled: self.cancelled,
         })
     }
@@ -356,6 +357,7 @@ impl ToFromWasmEvent for PlayerCommandSendEvent {
             Event::PlayerCommandSendEvent(data) => Self {
                 player: consume_player(state, &data.player),
                 command: data.command,
+                log: data.log,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),

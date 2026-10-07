@@ -61,6 +61,9 @@ interface event {
     record player-command-send-event-data {
         player: player,
         command: string,
+        /// Whether the server writes the command to its log. Starts as true; set it to
+        /// false for commands with secrets, such as passwords.
+        log: bool,
         cancelled: bool
     }
 

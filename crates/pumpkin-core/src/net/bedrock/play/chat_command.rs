@@ -19,6 +19,7 @@ impl BedrockClient {
             PlayerCommandSendEvent {
                 player: player.clone(),
                 command: command.to_string(),
+                log: true,
                 cancelled: false
             };
 
@@ -30,7 +31,7 @@ impl BedrockClient {
                     &command,
                 );
 
-                if server.advanced_config.commands.log_console {
+                if event.log && server.advanced_config.commands.log_console {
                     info!(
                         "Player ({}): executed command /{}",
                         player.gameprofile.name,
