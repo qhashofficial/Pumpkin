@@ -30,14 +30,15 @@ use crate::{
             PlayerInteractEventData, PlayerInteractUnknownEntityEventData,
             PlayerItemBreakEventData, PlayerItemConsumeEventData, PlayerItemDamageEventData,
             PlayerItemHeldEventData, PlayerItemMendEventData, PlayerJoinEventData,
-            PlayerKickEventData, PlayerLeashEntityEventData, PlayerLeaveEventData,
-            PlayerLevelChangeEventData, PlayerLinksSendEventData, PlayerLocaleChangeEventData,
-            PlayerLoginEventData, PlayerMoveEventData, PlayerNameEntityEventData,
-            PlayerOpenSignEventData, PlayerPermissionCheckEventData, PlayerPickupArrowEventData,
-            PlayerPortalEventData, PlayerPreLoginEventData, PlayerRecipeBookClickEventData,
-            PlayerRecipeBookSettingsChangeEventData, PlayerRecipeDiscoverEventData,
-            PlayerRegisterChannelEventData, PlayerResourcePackStatusEventData,
-            PlayerRespawnEventData, PlayerRiptideEventData, PlayerShearEntityEventData,
+            PlayerJoinLocationEventData, PlayerKickEventData, PlayerLeashEntityEventData,
+            PlayerLeaveEventData, PlayerLevelChangeEventData, PlayerLinksSendEventData,
+            PlayerLocaleChangeEventData, PlayerLoginEventData, PlayerMoveEventData,
+            PlayerNameEntityEventData, PlayerOpenSignEventData, PlayerPermissionCheckEventData,
+            PlayerPickupArrowEventData, PlayerPortalEventData, PlayerPreLoginEventData,
+            PlayerRecipeBookClickEventData, PlayerRecipeBookSettingsChangeEventData,
+            PlayerRecipeDiscoverEventData, PlayerRegisterChannelEventData,
+            PlayerResourcePackStatusEventData, PlayerRespawnEventData, PlayerRiptideEventData,
+            PlayerSavedLocation as WasmPlayerSavedLocation, PlayerShearEntityEventData,
             PlayerShowEntityEventData, PlayerSpawnChangeEventData, PlayerSpawnLocationEventData,
             PlayerStatisticIncrementEventData, PlayerSwapHandsEventData,
             PlayerTakeLecternBookEventData, PlayerTeleportEventData, PlayerToggleFlightEventData,
@@ -85,6 +86,7 @@ use pumpkin_core::plugin::player::{
     player_item_break::PlayerItemBreakEvent,
     player_item_mend::PlayerItemMendEvent,
     player_join::PlayerJoinEvent,
+    player_join_location::{PlayerJoinLocationEvent, PlayerSavedLocation},
     player_kick::PlayerKickEvent,
     player_leash_entity::PlayerLeashEntityEvent,
     player_leave::PlayerLeaveEvent,
@@ -2562,6 +2564,68 @@ impl ToFromWasmEvent for PlayerSpawnLocationEvent {
                 player: consume_player(state, &data.player),
                 spawn_pos: from_wasm_position(data.spawn_pos),
                 cancelled: data.cancelled,
+            },
+            _ => panic!("unexpected event type"),
+        }
+    }
+}
+
+impl ToFromWasmEvent for PlayerJoinLocationEvent {
+    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
+        let player = state
+            .add(self.player.clone())
+            .expect("failed to add player resource");
+        let target_world = state
+            .add(self.world.clone())
+            .expect("failed to add world resource");
+        let saved_location = self.saved_location.as_ref().map(|saved| {
+            let target_world = state
+                .add(saved.world.clone())
+                .expect("failed to add world resource");
+            WasmPlayerSavedLocation {
+                target_world,
+                position: to_wasm_position(saved.position),
+                yaw: saved.yaw,
+                pitch: saved.pitch,
+            }
+        });
+        Event::PlayerJoinLocationEvent(PlayerJoinLocationEventData {
+            player,
+            target_world,
+            position: to_wasm_position(self.position),
+            yaw: self.yaw,
+            pitch: self.pitch,
+            saved_location,
+        })
+    }
+
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        if !matches!(&event, Event::PlayerJoinLocationEvent(_)) {
+            cleanup_event(&event, state);
+            return;
+        }
+
+        let returned = Self::from_wasm_event(event, state);
+        self.world = returned.world;
+        self.position = returned.position;
+        self.yaw = returned.yaw;
+        self.pitch = returned.pitch;
+    }
+
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        match event {
+            Event::PlayerJoinLocationEvent(data) => Self {
+                player: consume_player(state, &data.player),
+                world: consume_world(state, &data.target_world),
+                position: from_wasm_position(data.position),
+                yaw: data.yaw,
+                pitch: data.pitch,
+                saved_location: data.saved_location.map(|saved| PlayerSavedLocation {
+                    world: consume_world(state, &saved.target_world),
+                    position: from_wasm_position(saved.position),
+                    yaw: saved.yaw,
+                    pitch: saved.pitch,
+                }),
             },
             _ => panic!("unexpected event type"),
         }

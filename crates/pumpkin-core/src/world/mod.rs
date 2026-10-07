@@ -2603,6 +2603,27 @@ impl World {
         }
     }
 
+    /// Returns the position, yaw and pitch a player without saved data spawns with.
+    pub async fn get_initial_spawn(&self) -> (Vector3<f64>, f32, f32) {
+        let info = self.level_info.load();
+        let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
+        let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
+        self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
+        let top = self.get_top_block(spawn_position);
+        let pos_y = if top > self.dimension.min_y {
+            top + 1
+        } else {
+            info.spawn_y
+        };
+
+        let position = Vector3::new(
+            f64::from(info.spawn_x) + 0.5,
+            f64::from(pos_y),
+            f64::from(info.spawn_z) + 0.5,
+        );
+        (position, info.spawn_yaw, info.spawn_pitch)
+    }
+
     /// Gets the y position of the first non air block from the top down
     pub fn get_top_block(&self, position: Vector2<i32>) -> i32 {
         let chunk_pos = Vector2::new(position.x >> 4, position.y >> 4);
@@ -2675,36 +2696,9 @@ impl World {
             (weather.rain_level, weather.thunder_level)
         };
         let runtime_id = player.entity_id() as u64;
-        let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
-            let position = player.position();
-            let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
-            let pitch = player.get_entity().pitch.load();
-
-            (position, yaw, pitch)
-        } else {
-            let spawn_position = Vector2::new(level_info.spawn_x, level_info.spawn_z);
-            let chunk_pos = Vector2::new(level_info.spawn_x >> 4, level_info.spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let top = self.get_top_block(spawn_position);
-            let pos_y = if top > self.dimension.min_y {
-                top + 1
-            } else {
-                level_info.spawn_y
-            };
-
-            let position = Vector3::new(
-                f64::from(level_info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(level_info.spawn_z) + 0.5,
-            );
-            (position, level_info.spawn_yaw, level_info.spawn_pitch)
-        };
-
-        // Keep the server-side transform aligned with the StartGame position. In
-        // particular, this ensures an early disconnect persists the real spawn.
-        player.living_entity.entity.set_pos(position);
-        player.living_entity.entity.set_rotation(yaw, pitch);
-        player.living_entity.entity.last_pos.store(position);
+        // The join location was already picked by `Server::add_player`.
+        let position = player.position();
+        let (yaw, pitch) = player.rotation();
 
         // Todo make the data less spread
         let level_settings = LevelSettings {
@@ -3251,36 +3245,11 @@ impl World {
             client.send_packet(&packet).await;
         }
 
-        let (position, yaw, pitch) = if player.has_played_before.load(Ordering::Relaxed) {
-            let position = player.position();
-            let yaw = player.get_entity().yaw.load(); //info.spawn_angle;
-            let pitch = player.get_entity().pitch.load();
-
-            (position, yaw, pitch)
-        } else {
-            let info = &self.level_info.load();
-            let spawn_position = Vector2::new(info.spawn_x, info.spawn_z);
-            let chunk_pos = Vector2::new(info.spawn_x >> 4, info.spawn_z >> 4);
-            self.level.get_or_fetch_chunk(chunk_pos, |_| ()).await;
-            let top = self.get_top_block(spawn_position);
-            let pos_y = if top > self.dimension.min_y {
-                top + 1
-            } else {
-                info.spawn_y
-            };
-
-            let position = Vector3::new(
-                f64::from(info.spawn_x) + 0.5,
-                f64::from(pos_y),
-                f64::from(info.spawn_z) + 0.5,
-            );
-            (position, info.spawn_yaw, info.spawn_pitch)
-        };
+        // The join location was already picked by `Server::add_player`.
+        let position = player.position();
+        let (yaw, pitch) = player.rotation();
 
         // Load chunks around the real spawn position before teleporting the client there.
-        player.living_entity.entity.set_pos(position);
-        player.living_entity.entity.set_rotation(yaw, pitch);
-        player.living_entity.entity.last_pos.store(position);
         chunker::update_position(player);
 
         let center_chunk = player.living_entity.entity.chunk_pos.load();

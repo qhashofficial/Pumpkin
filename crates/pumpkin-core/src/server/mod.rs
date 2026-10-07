@@ -9,6 +9,7 @@ use crate::net::authentication::fetch_mojang_public_keys;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
 use crate::plugin::PluginManager;
 use crate::plugin::loader::PluginLoader;
+use crate::plugin::player::player_join_location::{PlayerJoinLocationEvent, PlayerSavedLocation};
 use crate::plugin::player::player_login::PlayerLoginEvent;
 use crate::plugin::server::server_broadcast::ServerBroadcastEvent;
 use crate::server::tick_rate_manager::ServerTickRateManager;
@@ -638,7 +639,7 @@ impl Server {
     /// # Note
     ///
     /// You still have to spawn the `Player` in a `World` to let them join and make them visible.
-    pub fn add_player(
+    pub async fn add_player(
         self: &Arc<Self>,
         client: Arc<ClientPlatform>,
         profile: GameProfile,
@@ -698,10 +699,11 @@ impl Server {
             advancements.player = Arc::downgrade(&player);
         };
 
-        send_cancellable_blocking! {{
+        send_cancellable! {{
             self;
-            &mut PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
+            PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
+                let world = self.place_joining_player(&player, world).await;
                 player.screen_handler_sync_handler.store_player(player.clone());
                 world.add_player(&player).is_ok().then(|| {
                     {
@@ -739,6 +741,48 @@ impl Server {
                 None
             }
         }}
+    }
+
+    /// Picks the world and location a joining player spawns at and fires
+    /// [`PlayerJoinLocationEvent`] so plugins can change them. Returns the world to add the player to.
+    async fn place_joining_player(
+        self: &Arc<Self>,
+        player: &Arc<Player>,
+        world: Arc<World>,
+    ) -> Arc<World> {
+        let has_played_before = player.has_played_before.load(Ordering::Relaxed);
+        let (position, yaw, pitch) = if has_played_before {
+            let (yaw, pitch) = player.rotation();
+            (player.position(), yaw, pitch)
+        } else {
+            world.get_initial_spawn().await
+        };
+
+        let mut event = PlayerJoinLocationEvent {
+            player: player.clone(),
+            world: world.clone(),
+            position,
+            yaw,
+            pitch,
+            saved_location: has_played_before.then(|| PlayerSavedLocation {
+                world: world.clone(),
+                position,
+                yaw,
+                pitch,
+            }),
+        };
+        self.plugin_manager.fire(self, &mut event).await;
+
+        let entity = &player.living_entity.entity;
+        entity.set_pos(event.position);
+        entity.set_rotation(event.yaw, event.pitch);
+        entity.last_pos.store(event.position);
+        if event.world.uuid != world.uuid {
+            player.change_world_chunks(&world.level, &event.world);
+            entity.set_world(event.world.clone());
+        }
+
+        event.world
     }
 
     pub fn remove_player(&self, player: &Player) {

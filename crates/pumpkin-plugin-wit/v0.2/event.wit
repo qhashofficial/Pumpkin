@@ -1243,6 +1243,27 @@ interface event {
         cancelled: bool
     }
 
+    /// Where a player was when their data was last saved.
+    record player-saved-location {
+        target-world: %world,
+        position: position,
+        yaw: f32,
+        pitch: f32,
+    }
+
+    /// Fired when a player joins, before they are added to a world. The player spawns
+    /// directly at the location set here, without a teleport after the join.
+    record player-join-location-event-data {
+        player: player,
+        target-world: %world,
+        position: position,
+        yaw: f32,
+        pitch: f32,
+        /// The location from the player's saved data, or none on a first join.
+        /// Changing it has no effect.
+        saved-location: option<player-saved-location>,
+    }
+
     record player-unregister-channel-event-data {
         player: player,
         channel: string,
@@ -2158,6 +2179,7 @@ interface event {
         raid-stop-event,
         raid-trigger-event,
         lightning-strike-event,
+        player-join-location-event,
     }
 
     variant event {
@@ -2434,5 +2456,6 @@ interface event {
         raid-stop-event(raid-stop-event-data),
         raid-trigger-event(raid-trigger-event-data),
         lightning-strike-event(lightning-strike-event-data),
+        player-join-location-event(player-join-location-event-data),
     }
 }

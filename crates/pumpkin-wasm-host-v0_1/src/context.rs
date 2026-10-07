@@ -398,6 +398,11 @@ fn register_player_event(
                 pumpkin_core::plugin::api::events::player::player_spawn_location::PlayerSpawnLocationEvent,
             >(ctx, handler, priority, blocking);
         }
+        EventType::PlayerJoinLocationEvent => {
+            register_typed_event::<
+                pumpkin_core::plugin::api::events::player::player_join_location::PlayerJoinLocationEvent,
+            >(ctx, handler, priority, blocking);
+        }
         EventType::PlayerUnregisterChannelEvent => {
             register_typed_event::<
                 pumpkin_core::plugin::api::events::player::player_unregister_channel::PlayerUnregisterChannelEvent,

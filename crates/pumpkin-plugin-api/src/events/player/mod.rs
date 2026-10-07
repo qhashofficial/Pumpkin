@@ -78,6 +78,8 @@ pub mod player_item_damage;
 pub mod player_item_mend;
 /// Player join event.
 pub mod player_join;
+/// Player join location event.
+pub mod player_join_location;
 /// Player kick event.
 pub mod player_kick;
 /// Player leash entity event.
@@ -189,6 +191,7 @@ pub use player_item_consume::*;
 pub use player_item_damage::*;
 pub use player_item_mend::*;
 pub use player_join::*;
+pub use player_join_location::*;
 pub use player_kick::*;
 pub use player_leash_entity::*;
 pub use player_leave::*;
