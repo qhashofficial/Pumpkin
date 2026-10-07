@@ -1764,6 +1764,17 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player.is_movement_locked())
     }
 
+    fn set_save_data(&mut self, player: Resource<Player>, save: bool) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        player.set_save_data(save);
+        Ok(())
+    }
+
+    fn get_save_data(&mut self, player: Resource<Player>) -> wasmtime::Result<bool> {
+        let player = self.get(&player)?;
+        Ok(player.should_save_data())
+    }
+
     fn set_freeze_ticks(&mut self, player: Resource<Player>, ticks: i32) -> wasmtime::Result<()> {
         let player = self.get(&player)?;
         player.set_freeze_ticks(ticks);

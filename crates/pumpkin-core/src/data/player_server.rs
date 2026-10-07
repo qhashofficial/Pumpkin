@@ -52,6 +52,10 @@ impl ServerPlayerData {
             .on_closed(player.as_ref());
         player.on_handled_screen_closed();
 
+        if !player.should_save_data() {
+            return Ok(());
+        }
+
         let mut nbt = NbtCompound::new();
         player.write_nbt(&mut nbt);
 
@@ -76,6 +80,9 @@ impl ServerPlayerData {
             let mut snapshots = Vec::new();
             for world in server.worlds.load().iter() {
                 for player in world.players.load().iter() {
+                    if !player.should_save_data() {
+                        continue;
+                    }
                     let mut nbt = NbtCompound::new();
                     player.write_nbt(&mut nbt);
                     snapshots.push((player.gameprofile.id, nbt));
@@ -166,7 +173,7 @@ impl ServerPlayerData {
     ///
     /// A Result indicating success or the error that occurred.
     pub fn extract_data_and_save_player(&self, player: &Player) -> Result<(), PlayerDataError> {
-        if !self.storage.is_save_enabled() {
+        if !self.storage.is_save_enabled() || !player.should_save_data() {
             return Ok(());
         }
 

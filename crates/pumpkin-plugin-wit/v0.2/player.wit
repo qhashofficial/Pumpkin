@@ -974,6 +974,12 @@ interface player {
         /// Returns whether the player's movement is currently locked.
         is-movement-locked: func() -> bool;
 
+        /// Sets whether the server writes this player's data file when they leave and on
+        /// autosave. Anything not saved is lost when the player leaves.
+        set-save-data: func(save: bool);
+        /// Returns whether the server writes this player's data file.
+        get-save-data: func() -> bool;
+
         /// Sets the number of freeze ticks on the player (controlling the powdered snow / frostbite screen vignette).
         set-freeze-ticks: func(ticks: s32);
         /// Returns the current number of freeze ticks on the player.

@@ -483,6 +483,8 @@ pub struct Player {
     pub bedrock_spawned: AtomicBool,
     /// Whether the player is frozen in place (movement locked for dialogues/cutscenes).
     pub is_movement_locked: AtomicBool,
+    /// Whether the player's data file is written on leave and on autosave.
+    pub save_data: AtomicBool,
     /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
     pub client_loaded_timeout: AtomicU32,
     /// Counter for tracking chat and command spam. Decays each server tick.
@@ -758,6 +760,7 @@ impl Player {
             previous_gamemode: AtomicCell::new(None),
             camera_target_id: AtomicCell::new(None),
             is_movement_locked: AtomicBool::new(false),
+            save_data: AtomicBool::new(true),
             // TODO: Send the CPlayerSpawnPosition packet when the client connects with proper values
             respawn_point: std::sync::Mutex::new(None),
             sleeping_since: AtomicCell::new(None),
@@ -2597,6 +2600,16 @@ impl Player {
 
     pub fn is_movement_locked(&self) -> bool {
         self.is_movement_locked.load(Ordering::Relaxed)
+    }
+
+    /// Sets whether the server writes this player's data file. Data that was not saved
+    /// is lost when the player leaves.
+    pub fn set_save_data(&self, save: bool) {
+        self.save_data.store(save, Ordering::Relaxed);
+    }
+
+    pub fn should_save_data(&self) -> bool {
+        self.save_data.load(Ordering::Relaxed)
     }
 
     pub fn set_freeze_ticks(&self, ticks: i32) {
