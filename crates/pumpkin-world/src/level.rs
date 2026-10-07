@@ -116,6 +116,9 @@ pub struct Level {
     pub save_enabled: AtomicBool,
     /// Number of ticks between autosave checks. If 0, autosave is disabled.
     pub autosave_ticks: u64,
+    /// When false, nothing of this level is written to disk: chunks and entities are
+    /// dropped when they unload.
+    pub persistent: AtomicBool,
 
     pending_entity_generations: Arc<DashMap<Vector2<i32>, Vec<oneshot::Sender<SyncEntityChunk>>>>,
 
@@ -292,6 +295,7 @@ impl Level {
             should_unload: AtomicBool::new(false),
             save_enabled: AtomicBool::new(true),
             autosave_ticks: level_config.autosave_ticks,
+            persistent: AtomicBool::new(true),
             pending_entity_generations,
             level_channel: level_channel.clone(),
             thread_tracker,
@@ -847,7 +851,7 @@ impl Level {
     }
 
     pub async fn write_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, SyncChunk)>) {
-        if chunks_to_write.is_empty() {
+        if chunks_to_write.is_empty() || !self.persistent.load(Ordering::Relaxed) {
             return;
         }
 
@@ -864,7 +868,7 @@ impl Level {
     }
 
     pub async fn write_entity_chunks(&self, chunks_to_write: Vec<(Vector2<i32>, SyncEntityChunk)>) {
-        if chunks_to_write.is_empty() {
+        if chunks_to_write.is_empty() || !self.persistent.load(Ordering::Relaxed) {
             return;
         }
 

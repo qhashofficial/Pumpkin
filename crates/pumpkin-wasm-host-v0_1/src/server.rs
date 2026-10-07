@@ -16,9 +16,10 @@ use crate::{
             datapack::DatapackManager as WitDatapackManager,
             player::{BanIpOptions, BanPlayerOptions, Player},
             server::{
-                BanManager as WitBanManager, BannedIpEntry, BannedPlayerEntry, Difficulty,
-                Dimension, OpEntry, OpManager as WitOpManager, Server, SysInfo,
+                BanManager as WitBanManager, BannedIpEntry, BannedPlayerEntry, BuiltinGenerator,
+                Difficulty, Dimension, OpEntry, OpManager as WitOpManager, Server, SysInfo,
                 WhitelistEntry as WitWhitelistEntry, WhitelistManager as WitWhitelistManager,
+                WorldOptions,
             },
             uuid::Uuid as WitUuid,
         },
@@ -587,6 +588,51 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
         let world = plugin
             .store
             .pump_blocking(&mut host, move || server.create_world(name, internal_dim))
+            .await?;
+
+        host.get()
+            .add(world)
+            .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
+    }
+
+    async fn create_world_with_options(
+        mut host: Access<'_, PluginHostState, Self>,
+        _rep: Resource<Server>,
+        name: String,
+        dimension: Dimension,
+        options: WorldOptions,
+    ) -> wasmtime::Result<Resource<pumpkin::plugin::world::World>> {
+        let (server, plugin) = {
+            let state = host.get();
+            let server = state
+                .server
+                .clone()
+                .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
+            let plugin = state
+                .plugin
+                .as_ref()
+                .and_then(std::sync::Weak::upgrade)
+                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
+            (server, plugin)
+        };
+
+        let internal_dim = match dimension {
+            Dimension::Overworld => pumpkin_data::dimension::Dimension::OVERWORLD,
+            Dimension::Nether => pumpkin_data::dimension::Dimension::THE_NETHER,
+            Dimension::End => pumpkin_data::dimension::Dimension::THE_END,
+        };
+        let options = pumpkin_core::server::WorldOptions {
+            generator: match options.generator {
+                BuiltinGenerator::Configured => pumpkin_core::server::BuiltinGenerator::Configured,
+                BuiltinGenerator::Void => pumpkin_core::server::BuiltinGenerator::Void,
+            },
+            persistent: options.persistent,
+        };
+        let world = plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                server.create_world_with_options(name, internal_dim, options)
+            })
             .await?;
 
         host.get()

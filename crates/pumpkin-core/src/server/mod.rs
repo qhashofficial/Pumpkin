@@ -22,11 +22,13 @@ use arc_swap::ArcSwap;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+use pumpkin_data::chunk::Biome;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::permission::PermissionManager;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
-use pumpkin_world::generation::generator::GeneratorInit;
+use pumpkin_world::generation::generator::flat::FlatGenerator;
+use pumpkin_world::generation::generator::{GeneratorInit, WorldGenerator};
 use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
@@ -65,6 +67,32 @@ pub mod ticker;
 pub use recipe::RecipeManager;
 
 use crate::data::advancement_data::AdvancementManager;
+
+/// A chunk generator built into the server, for worlds created by plugins.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BuiltinGenerator {
+    /// The generator configured for the world's dimension.
+    Configured,
+    /// Generates only air, in the void biome.
+    Void,
+}
+
+/// Options for [`Server::create_world_with_options`].
+#[derive(Clone, Copy, Debug)]
+pub struct WorldOptions {
+    pub generator: BuiltinGenerator,
+    /// When false, the world's chunks, entities and other data are never written to disk.
+    pub persistent: bool,
+}
+
+impl Default for WorldOptions {
+    fn default() -> Self {
+        Self {
+            generator: BuiltinGenerator::Configured,
+            persistent: true,
+        }
+    }
+}
 
 /// Represents a Minecraft server instance.
 pub struct Server {
@@ -463,6 +491,17 @@ impl Server {
     }
 
     pub fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
+        self.create_world_with_options(name, dimension, WorldOptions::default())
+    }
+
+    /// Creates or loads a world like [`Self::create_world`]. If a world with this name and
+    /// dimension already exists, it is returned and `options` are ignored.
+    pub fn create_world_with_options(
+        self: &Arc<Self>,
+        name: String,
+        dimension: Dimension,
+        options: WorldOptions,
+    ) -> Arc<World> {
         {
             let worlds = self.worlds.load();
             let world = worlds
@@ -483,6 +522,19 @@ impl Server {
 
         let level =
             pumpkin_world::dimension::into_level(dimension.clone(), &config, world_path, seed);
+        level
+            .persistent
+            .store(options.persistent, Ordering::Relaxed);
+        if options.generator == BuiltinGenerator::Void {
+            level.set_world_gen(Arc::new(WorldGenerator::Flat(Box::new(
+                FlatGenerator::new(
+                    level.seed,
+                    dimension.clone(),
+                    Vec::new(),
+                    Biome::THE_VOID.registry_id.to_string(),
+                ),
+            ))));
+        }
         let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
         let world = Arc::new(world);
         let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));

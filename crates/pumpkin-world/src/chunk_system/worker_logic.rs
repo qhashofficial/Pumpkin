@@ -209,10 +209,11 @@ pub async fn io_write_work(
         .await;
         let upgrade_failed = match upgrade_result {
             Ok(vec) => {
-                if let Err(e) = level
-                    .chunk_saver
-                    .save_chunks(&level.level_folder, vec)
-                    .await
+                if level.persistent.load(Relaxed)
+                    && let Err(e) = level
+                        .chunk_saver
+                        .save_chunks(&level.level_folder, vec)
+                        .await
                 {
                     error!("Failed to save chunks: {:?}", e);
                 }

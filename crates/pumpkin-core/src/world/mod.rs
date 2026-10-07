@@ -594,13 +594,15 @@ impl World {
         }
 
         // Save portal POI to disk
-        let save_result = self
-            .portal_poi
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .save_all();
-        if let Err(e) = save_result {
-            error!("Failed to save portal POI: {e}");
+        if self.level.persistent.load(Relaxed) {
+            let save_result = self
+                .portal_poi
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .save_all();
+            if let Err(e) = save_result {
+                error!("Failed to save portal POI: {e}");
+            }
         }
 
         self.level.shutdown().await;
@@ -6961,11 +6963,11 @@ impl World {
             self.save_block_entities(chunk_pos);
         }
 
-        if let Ok(mut portal_poi) = self.portal_poi.try_lock() {
-            let _ = portal_poi.save_all();
-        }
+        if self.level.persistent.load(Relaxed) {
+            if let Ok(mut portal_poi) = self.portal_poi.try_lock() {
+                let _ = portal_poi.save_all();
+            }
 
-        {
             let custom_data = self
                 .custom_data
                 .lock()

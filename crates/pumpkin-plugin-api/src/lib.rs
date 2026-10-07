@@ -174,7 +174,7 @@ pub use wit::pumpkin::plugin::player::{
     BedrockMinecraftVersion, BedrockPlayer, JavaMinecraftVersion, JavaPlayer, Player,
 };
 pub use wit::pumpkin::plugin::scoreboard::{CollisionRule, NametagVisibility, TeamSettings};
-pub use wit::pumpkin::plugin::server::Dimension;
+pub use wit::pumpkin::plugin::server::{BuiltinGenerator, Dimension, WorldOptions};
 pub use wit::pumpkin::plugin::world::{
     Block, BlockDirection, BlockState, BlockStateInfo, Entity, Flammable, LivingEntity, Mob,
     PathNodeType, RayTraceBlockResult, RayTraceEntityResult, RaycastResult, World, WorldBorder,

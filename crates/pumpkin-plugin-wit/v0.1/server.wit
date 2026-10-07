@@ -137,6 +137,22 @@ interface server {
         end,
     }
 
+    /// A chunk generator built into the server. It runs entirely on the server, without
+    /// calling back into the plugin.
+    enum builtin-generator {
+        /// The generator configured for the world's dimension.
+        configured,
+        /// Generates only air, in the void biome.
+        void,
+    }
+
+    /// Options for `create-world-with-options`.
+    record world-options {
+        generator: builtin-generator,
+        /// When false, the world's chunks, entities and other data are never written to disk.
+        persistent: bool,
+    }
+
     record sys-info {
         cpu-count: option<u32>,
         total-memory: option<u64>,
@@ -194,6 +210,10 @@ interface server {
         /// Creates or loads a world by its name and dimension.
         /// If a world with the given name already exists, it will be returned.
         create-world: func(name: string, dimension: dimension) -> %world;
+
+        /// Creates or loads a world like `create-world`, with the given options.
+        /// If a world with the given name already exists, it is returned and the options are ignored.
+        create-world-with-options: func(name: string, dimension: dimension, options: world-options) -> %world;
 
         /// Unloads and saves a world by its name or dimension.
         /// Returns an error if the world cannot be found, is the primary/default world, or still has players inside.
