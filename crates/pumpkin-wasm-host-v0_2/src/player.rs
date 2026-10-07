@@ -596,6 +596,54 @@ pub(crate) const fn from_wit_permission_level(
     }
 }
 
+/// Map item data has nested optional fields that the generated packet mapping can't convert.
+fn serialize_map_item_data(
+    data: &pumpkin::plugin::java_packets::CMapItemData,
+    version: JavaMinecraftVersion,
+) -> Option<bytes::Bytes> {
+    use pumpkin_protocol::codec::var_int::VarInt;
+    use pumpkin_protocol::java::client::play::{CMapItemData, MapIcon, MapPatch};
+
+    let icons: Option<Vec<MapIcon>> = data.icons.as_ref().map(|icons| {
+        icons
+            .iter()
+            .map(|icon| {
+                MapIcon::new(
+                    VarInt(icon.icon_type),
+                    icon.x.cast_signed(),
+                    icon.z.cast_signed(),
+                    icon.direction.cast_signed(),
+                    icon.display_name
+                        .clone()
+                        .map(pumpkin_util::text::TextComponent::text),
+                )
+            })
+            .collect()
+    });
+    let patch = data.data.as_ref().map(|patch| {
+        MapPatch::new(
+            patch.columns,
+            patch.rows,
+            patch.x.cast_signed(),
+            patch.z.cast_signed(),
+            &patch.data,
+        )
+    });
+    let packet = CMapItemData::new(
+        VarInt(data.map_id),
+        data.scale.cast_signed(),
+        data.tracking_position,
+        data.locked,
+        icons.as_deref(),
+        patch,
+    );
+
+    let mut buf = Vec::new();
+    pumpkin_core::net::java::JavaClient::write_packet_for_version(&packet, version, &mut buf)
+        .ok()?;
+    Some(buf.into())
+}
+
 pub(crate) fn parse_ban_expiry(
     expires_at_utc: Option<String>,
     duration_seconds: Option<u64>,
@@ -3494,10 +3542,14 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .client
             .java()
             .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
-        if let Some(bytes) = crate::generated_packets::serialize_java_packet(
-            &packet,
-            pumpkin_data::packet::CURRENT_MC_VERSION,
-        ) {
+        let version = pumpkin_data::packet::CURRENT_MC_VERSION;
+        let bytes = match &packet {
+            pumpkin::plugin::java_packets::ClientboundPacket::CMapItemData(data) => {
+                serialize_map_item_data(data, version)
+            }
+            _ => crate::generated_packets::serialize_java_packet(&packet, version),
+        };
+        if let Some(bytes) = bytes {
             client.send_packet_now_data(bytes).await;
         }
         Ok(())
