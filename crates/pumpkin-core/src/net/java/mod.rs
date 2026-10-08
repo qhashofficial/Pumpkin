@@ -678,6 +678,10 @@ impl JavaClient {
     }
 
     pub fn try_kick(&self, reason: &TextComponent) {
+        if let Some(queue) = self.translator() {
+            self.kick_translated(queue, self.serialize_disconnect(reason), reason);
+            return;
+        }
         if let Some(data) = self
             .serialize_disconnect(reason)
             .and_then(|data| self.translate_outgoing(data).0)
@@ -708,6 +712,15 @@ impl JavaClient {
     }
 
     pub async fn kick_explicit(&self, reason: &TextComponent, send_packet: bool) {
+        if let Some(queue) = self.translator() {
+            let data = if send_packet {
+                self.serialize_disconnect(reason)
+            } else {
+                None
+            };
+            self.kick_translated(queue, data, reason);
+            return;
+        }
         if send_packet && let Some(data) = self.serialize_disconnect(reason) {
             // Stalled peer: never flushes -> Close anyway.
             let _ = tokio::time::timeout(
@@ -719,6 +732,34 @@ impl JavaClient {
         let reason_text = reason.clone().get_text();
         warn!("Closing connection for {}: {reason_text}", self.id);
         self.close();
+    }
+
+    /// Translated clients: the disconnect packet waits behind the packets already queued
+    /// for translation, and the connection closes once it is flushed. The caller never
+    /// waits, because the translation may need the plugin admission gate it holds.
+    fn kick_translated(
+        &self,
+        queue: &UnboundedSender<TranslateJob>,
+        data: Option<Bytes>,
+        reason: &TextComponent,
+    ) {
+        let reason_text = reason.clone().get_text();
+        warn!("Closing connection for {}: {reason_text}", self.id);
+        let Some(data) = data else {
+            self.close();
+            return;
+        };
+        let (done, flushed) = oneshot::channel();
+        let _ = queue.send(TranslateJob {
+            data,
+            done: Some((OutgoingPacket::flushed, done)),
+        });
+        let close = self.close_token.clone();
+        self.rt_handle.spawn(async move {
+            // Stalled peer or dropped job: close anyway.
+            let _ = tokio::time::timeout(DISCONNECT_FLUSH_TIMEOUT, flushed).await;
+            close.cancel();
+        });
     }
 
     pub async fn send_packet_now(&self, packet: Bytes) {
